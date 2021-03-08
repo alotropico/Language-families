@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<head>
+  <meta charset="utf-8">
+  <title>Main Language Families</title>
+  
+  <!-- based on http://techslides.com/d3-map-starter-kit/ -->
+  <style>
+    html, body{
+      margin: 0;
+      padding-bottom: 0;
+    }
+    body{
+      background: #1a1f28;
+      font-family: sans-serif;
+      font-size: 14px;
+    }
+    .region{
+      fill: #d9d9d9;
+      transition: fill .4s ease;
+      stroke: #1a1f28;
+      stroke-width: .5px;
+    }
+    .region:hover{
+      fill: #ffe738 !important;
+      stroke-width: 1px;
+    }
+    .phis{
+      fill: #fff !important;
+    }
+    .text{
+      font-size:10px;
+    }
+    #container {
+      position: absolute;
+      overflow:hidden;
+      left: 1vw;
+      top: 1vw;
+      right: 1vw;
+      bottom: 1vw;
+      background: #293244;
+    }
+    .hidden { 
+      display: none; 
+    }
+    div.tooltip {
+      color: #222; 
+      background: #fff; 
+      padding: 1em; 
+      box-shadow: 0 1px 3px rgba(0,0,0,.2);
+      position: absolute;
+    }
+    .graticule {
+      fill: none;
+      stroke: #d9d9d9;
+      stroke-width: .5px;
+      stroke-opacity: .5;
+    }
+  </style>
+</head>
+<body>
+
+  <div id="container"></div>
+
+<script src="js/d3.min.js"></script>
+<script src="js/topojson.v1.min.js"></script>
+<script>
+
+var zoom = d3.behavior.zoom()
+    .scaleExtent([1, 2])
+    .on("zoom", move);
+
+
+var width = document.getElementById('container').offsetWidth;
+var height = document.getElementById('container').offsetHeight;
+
+var topo,
+  projection,
+  path,
+  svg,
+  g;
+
+var colors = ['#e9af8d', '#f3a6b2', '#8d5a99', '#e8718d', '#ff9e17', '#7d8b8f', '#becf50', '#987db7', '#e77148', '#91522d', '#85b66f', '#c43c39', '#987db7', '#b7484b', '#8d5a99', '#b7484b', '#d5b43c', '#a47158', '#e7b08f', '#e5b636', '#becf50', '#e77148', '#ff9e17', '#f3a6b2', '#729b6f'];
+
+var colorCount = -1;
+
+function getColor(){
+  colorCount++;
+  if(colorCount>=colors.length)
+    colorCount = 0;
+
+  return colors[colorCount];
+}
+
+var graticule = d3.geo.graticule();
+
+var tooltip = d3.select("#container").append("div").attr("class", "tooltip hidden");
+
+setup(width, height);
+
+function setup(width,height){
+  projection = d3.geo.equirectangular()
+    .translate([(width/2), (height/2)])
+    .scale( width / 2 / Math.PI);
+
+    // mercator
+    // albers
+    // azimuthalEqualArea
+    // azimuthalEquidistant
+    // conicConformal
+    // conicEqualArea
+    // conicEquidistant
+    // equirectangular *
+    // gnomonic
+    // orthographic *
+    // stereographic
+    // transverseMercator
+
+  path = d3.geo.path().projection(projection);
+
+  svg = d3.select("#container").append("svg")
+      .attr("width", width)
+      .attr("height", height)
+      .call(zoom)
+      .on("click", click)
+      .append("g");
+
+  g = svg.append("g");
+
+}
+
+d3.json("data/world-2.json", function(error, world) {
+
+  var countries = topojson.feature(world, world.objects['world-2']).features;
+
+  topo = countries;
+  draw('region', topo);
+
+});
+
+d3.json("data/lakes-and-ice.json", function(error, world) {
+
+  var countries = topojson.feature(world, world.objects['lakes-and-ice']).features;
+
+  topo = countries;
+  draw('phis', topo);
+
+});
+
+function draw(containerClass, topo) {
+  var region = g.selectAll("." + containerClass).data(topo);
+
+  region.enter().insert("path")
+      .attr("class", containerClass)
+      .attr("d", path)
+      .attr("id", function(d,i) { return d.id; })
+      .attr("title", function(d,i) { return d.properties.name; })
+      .style("fill", function(d, i) { return '#'+d.properties.color; });
+
+  //offsets for tooltips
+  var offsetL = document.getElementById('container').offsetLeft+0
+  var offsetT = document.getElementById('container').offsetTop+0;
+
+  if(containerClass == 'region'){
+    //tooltips
+    region
+      .on("mousemove", function(d,i) {
+
+        var mouse = d3.mouse(svg.node()).map( function(d) { return parseInt(d); } );
+
+        tooltip.classed("hidden", false)
+               .attr("style", "left:"+(mouse[0]+offsetL)+"px;top:"+(mouse[1]+offsetT)+"px")
+               .html(d.properties.layer);
+
+        })
+        .on("mouseout",  function(d,i) {
+          tooltip.classed("hidden", true);
+        });
+  }
+}
+
+
+function redraw() {
+  width = document.getElementById('container').offsetWidth;
+  height = height;
+  d3.select('svg').remove();
+  setup(width,height);
+  draw(topo);
+}
+
+
+function move() {
+
+  var t = d3.event.translate;
+  var s = d3.event.scale; 
+  zscale = s;
+  var h = 0;
+
+
+  t[0] = Math.min(
+    (width/height)  * (s - 1), 
+    Math.max( width * (1 - s), t[0] )
+  );
+
+  t[1] = Math.min(
+    h * (s - 1) + h * s, 
+    Math.max(height  * (1 - s) - h * s, t[1])
+  );
+
+  zoom.translate(t);
+  g.attr("transform", "translate(" + t + ")scale(" + s + ")");
+
+  d3.selectAll(".region").style("stroke-width", 1 / s);
+}
+
+function click() {
+  var latlon = projection.invert(d3.mouse(this));
+  console.log(latlon);
+}
+
+function addpoint(lat,lon,text) {
+
+  var gpoint = g.append("g").attr("class", "gpoint");
+  var x = projection([lat,lon])[0];
+  var y = projection([lat,lon])[1];
+
+  gpoint.append("svg:circle")
+        .attr("cx", x)
+        .attr("cy", y)
+        .attr("class","point")
+        .attr("r", 3);
+
+  if(text.length>0){
+
+    gpoint.append("text")
+          .attr("x", x+6)
+          .attr("y", y+4)
+          .attr("class","text")
+          .text(text);
+  }
+}
+
+</script>
+</body>
+</html>
